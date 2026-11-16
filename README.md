@@ -4,12 +4,12 @@ Mobile-first booking site for **Community Matters 2 Inc. (CM2)**.
 Parents scan the flyer QR, pick one window, get a code, and can look it up later.
 Staff manage everything from a private admin page.
 
-**Stack:** plain HTML/CSS/JS (no framework, no build step) · Vercel Functions (`api/`) · Neon Postgres (from the Vercel Marketplace) · GitHub.
+**Stack:** plain HTML/CSS/JS (no framework, no build step) · Vercel Functions (`api/`) · Supabase Postgres · GitHub.
 
 ## How the parts connect
 
 ```
-Browser (public/*.html + js)  ──fetch──▶  Vercel Functions (api/*.js)  ──SQL──▶  Neon Postgres
+Browser (public/*.html + js)  ──fetch──▶  Vercel Functions (api/*.js)  ──SQL──▶  Supabase Postgres
          never sees the database            check every input                    one table: bookings
 ```
 
@@ -22,7 +22,7 @@ Christmas in Focus/
 │   ├── lookup.js           POST /api/lookup     "Find my booking" (code + email must both match)
 │   └── admin.js            GET/POST /api/admin  staff login, list, check in, cancel, notes
 ├── lib/                    Server helpers (not URLs)
-│   ├── db.js               Database connection + creates the table automatically
+│   ├── db.js               Database connection + creates & locks the table automatically
 │   ├── auth.js             Staff password check + signed login cookie
 │   └── http.js             JSON responses, error handling
 ├── public/                 Everything the browser downloads
@@ -34,9 +34,10 @@ Christmas in Focus/
 │   ├── css/styles.css      All styling (flyer colours, fonts, print layout)
 │   ├── assets/logo.png
 │   └── js/api.js, utils.js Shared helpers (utils.js is used by the server too)
-├── package.json            Lists the one dependency (Neon driver)
+├── package.json            Lists the one dependency (postgres driver)
 ├── vercel.json             Tells Vercel the website lives in /public
-└── .env.example            The 3 secret settings the server needs (no real values)
+├── .env                    YOUR real secrets — git-ignored, never pushed
+└── .env.example            The settings the server needs (no real values)
 ```
 
 ### Why double-booking is impossible
@@ -48,6 +49,9 @@ There's one `bookings` table, plus two database rules (unique indexes):
 
 The list of slots comes from `public/config.js`, so there's nothing to "seed".
 
+### Why the Supabase publishable key can't see bookings
+Supabase lets anyone holding the project's public "publishable/anon" key read tables that aren't locked down. On first run, `lib/db.js` turns on **Row Level Security** for `bookings` with **no policies**, and revokes access from the `anon` and `authenticated` roles. Only our server, connecting with `DATABASE_URL`, can read or write it. In Supabase → Table Editor, `bookings` should show **RLS enabled**.
+
 ---
 
 ## Setup (step by step)
@@ -58,34 +62,31 @@ You need: a **GitHub** account, a **Vercel** account (sign in with GitHub), and 
 Open `public/config.js` and replace every `TODO`: the year, the slot times, session length, location, and phone/email.
 (8 times × 3 days = 24 windows. A day can have its own `times` list.)
 
-### 2. Put the code on GitHub
-1. On <https://github.com/new>, create an **empty private** repo named `christmas-in-focus`. Don't add a README or .gitignore.
-2. In a terminal in this folder:
-   ```bash
-   git remote add origin https://github.com/YOUR_GITHUB_NAME/christmas-in-focus.git
-   git push -u origin main
-   ```
+### 2. Get the Supabase connection string
+1. Open your project at <https://supabase.com/dashboard> → click **Connect** (top bar).
+2. Choose **Transaction pooler** (port **6543**) and copy the URI.
+3. Replace `[YOUR-PASSWORD]` with your database password. If you've forgotten it: Project Settings → Database → **Reset database password**.
+4. Paste it after `DATABASE_URL=` in `.env`.
 
-### 3. Import the project into Vercel
-1. <https://vercel.com/new> → **Import** your `christmas-in-focus` repo.
+`.env` already has a generated `ADMIN_PASSWORD` and `SESSION_SECRET`. `.env` is git-ignored, so **it is never pushed to GitHub**.
+
+### 3. Code on GitHub
+The code lives at <https://github.com/CommunityMatters2/Christmas-In-Focus---Cm2>. To publish changes:
+```bash
+git add -A
+git commit -m "Describe the change"
+git push
+```
+
+### 4. Import the project into Vercel
+1. <https://vercel.com/new> → **Import** the `Christmas-In-Focus---Cm2` repo.
 2. Framework Preset: **Other**. Leave Build Command and Output Directory empty, because `vercel.json` handles it.
-3. Click **Deploy**. The site loads, but booking won't work until steps 4–5 are done.
+3. Open **Environment Variables** on that same screen. Open your `.env`, copy the whole thing, and paste it into the first "Key" box. Vercel splits it into separate variables. You need at least `DATABASE_URL`, `ADMIN_PASSWORD` and `SESSION_SECRET`.
+4. Click **Deploy**. The `bookings` table is created in Supabase on the first visit.
 
-### 4. Add the database (Neon, free tier)
-In Vercel, open your project → **Storage** → **Create Database** → **Neon (Serverless Postgres)** → accept → pick a region near you → **Connect** it to this project (all environments).
-This adds `DATABASE_URL` to the project automatically. The `bookings` table is created on the first request.
+> Added or changed a variable later? Vercel → Settings → Environment Variables, then **Deployments → ⋯ → Redeploy**.
 
-### 5. Add the staff password and secret
-Vercel project → **Settings → Environment Variables** → add both for **Production, Preview and Development**:
-
-| Name | Value |
-|---|---|
-| `ADMIN_PASSWORD` | The password staff will type. Make it long, e.g. 4 random words. |
-| `SESSION_SECRET` | A random string. Generate one: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-
-Then **Deployments → ⋯ on the latest → Redeploy** so the new settings take effect.
-
-### 6. Done: it auto-deploys
+### 5. Done: it auto-deploys
 - Parents: `https://YOUR-PROJECT.vercel.app`
 - Staff: `https://YOUR-PROJECT.vercel.app/admin.html`
 
@@ -95,10 +96,9 @@ From now on, every `git push` to `main` redeploys automatically. Pushes to other
 
 ### Run it on your own computer (optional)
 ```bash
-vercel link                     # connect this folder to the Vercel project
-vercel env pull .env.local      # download DATABASE_URL, ADMIN_PASSWORD, SESSION_SECRET
 npm install
-vercel dev                      # open http://localhost:3000
+vercel link                     # connect this folder to the Vercel project (once)
+vercel dev                      # reads .env, open http://localhost:3000
 ```
 Note: local testing uses the **same database** as the live site unless you set up a separate one. Cancel any test bookings afterwards, or test before you share the link.
 
