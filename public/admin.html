@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Staff Dashboard – Christmas in Focus | CM2</title>
+  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Pinyon+Script&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <img src="assets/logo.png" alt="Community Matters 2 (CM2) logo" class="logo" width="72" height="72">
+    <p class="eyebrow">Staff only</p>
+    <h1>Christmas <span class="script">in Focus</span></h1>
+    <p class="subtitle">Booking dashboard</p>
+  </header>
+
+  <main class="wide">
+    <p class="center muted" id="loading-view">Loading…</p>
+
+    <!-- Login -->
+    <section class="card narrow" id="login-view" aria-labelledby="login-heading" hidden>
+      <h2 id="login-heading">Staff sign in</h2>
+      <form id="login-form">
+        <!-- hidden username helps password managers remember the staff password -->
+        <input type="text" name="username" value="cm2-staff" autocomplete="username" hidden>
+        <div class="field">
+          <label for="admin-password">Staff password</label>
+          <input id="admin-password" type="password" autocomplete="current-password" required>
+        </div>
+        <div class="message error" id="login-error" role="alert"></div>
+        <button class="btn block" type="submit" id="login-btn">Sign in</button>
+      </form>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dash-view" hidden>
+      <div class="toolbar no-print">
+        <p class="muted" style="margin:0">Updates every 15 seconds · <span id="updated"></span></p>
+        <div class="btn-row" style="margin:0">
+          <button class="btn secondary small" type="button" id="refresh-btn">Refresh now</button>
+          <button class="btn secondary small" type="button" id="logout-btn">Sign out</button>
+        </div>
+      </div>
+
+      <div class="summary" id="summary" aria-live="polite"></div>
+
+      <div class="controls no-print">
+        <div class="field" style="margin:0">
+          <label for="search">Search by name or code</label>
+          <input id="search" type="search" placeholder="e.g. Johnson or CM2-7KQ4XM">
+        </div>
+        <button class="btn secondary" type="button" id="export-btn">Export CSV</button>
+        <div class="field" style="margin:0">
+          <label for="print-day">Print day sheet</label>
+          <div style="display:flex; gap:.5rem">
+            <select id="print-day"></select>
+            <button class="btn" type="button" id="print-btn">Print</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="message info" id="admin-message" role="status"></div>
+      <div id="day-tables"></div>
+    </section>
+
+    <section id="print-sheet" class="print-only" aria-hidden="true"></section>
+  </main>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Christmas in Focus – Book Your Family Portrait | CM2</title>
+  <meta name="description" content="Book one holiday family portrait window with Community Matters 2 Inc. (CM2).">
+  <link rel="icon" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500&family=Pinyon+Script&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <img src="assets/logo.png" alt="Community Matters 2 (CM2) logo" class="logo" width="72" height="72">
+    <p class="eyebrow">CM2 Christmas Collection</p>
+    <h1>Christmas <span class="script">in Focus</span></h1>
+    <p class="subtitle">Community Through Our Lens</p>
+  </header>
+
+  <main>
+    <ul class="info-strip" id="info-strip" aria-label="Session details"></ul>
+
+    <section class="card" aria-labelledby="pick-heading">
+      <h2 id="pick-heading">Choose your window</h2>
+      <p class="counter" aria-live="polite">
+        <strong id="slots-left">–</strong> of <span id="slots-total">24</span> windows left
+      </p>
+      <div class="day-tabs" id="day-tabs" role="group" aria-label="Choose a day"></div>
+      <div class="slot-grid" id="slot-grid" role="group" aria-label="Available times">
+        <p class="muted">Loading available times…</p>
+      </div>
+      <div class="message info" id="slot-message" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="card" id="form-section" aria-labelledby="form-heading" hidden>
+      <h2 id="form-heading">Your details</h2>
+      <p class="selected-summary" id="selected-summary" aria-live="polite"></p>
+
+      <form id="booking-form">
+        <div class="field">
+          <label for="parentName">Parent / guardian full name</label>
+          <input id="parentName" name="parentName" type="text" autocomplete="name" required minlength="2" maxlength="100">
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" required maxlength="254">
+        </div>
+        <div class="field">
+          <label for="phone">Phone</label>
+          <input id="phone" name="phone" type="tel" autocomplete="tel" required minlength="7" maxlength="30">
+        </div>
+        <div class="field">
+          <label for="members">Number of family members <span class="hint">(up to 7)</span></label>
+          <select id="members" name="members" required>
+            <option value="">Choose…</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="familyName">Family last name for the photo label <span class="hint">(optional)</span></label>
+          <input id="familyName" name="familyName" type="text" autocomplete="family-name" maxlength="60">
+        </div>
+        <div class="field">
+          <label for="notes">Notes <span class="hint">(optional, <span id="notes-left">200</span> characters left)</span></label>
+          <textarea id="notes" name="notes" maxlength="200"></textarea>
+        </div>
+        <div class="field">
+          <label class="check" for="policy">
+            <input id="policy" name="policy" type="checkbox" required>
+            <span>I understand there are no redos or makeup sessions.</span>
+          </label>
+        </div>
+
+        <div class="message error" id="form-error" role="alert"></div>
+        <button class="btn block" type="submit" id="submit-btn">Reserve my window</button>
+      </form>
+    </section>
+
+    <p class="center"><a href="lookup.html">Already booked? Find my booking</a></p>
+  </main>
+
+  <footer class="site-footer" id="footer"></footer>
+
+  <script type="module" src="js/booking.js"></script>
+</body>
+</html>
