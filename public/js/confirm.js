@@ -1,9 +1,11 @@
 // confirm.js — runs confirm.html?code=CM2-XXXXXX.
 // Fetches the booking summary from /api/booking (no email/phone is returned).
+// Families land here from Stripe after paying; the server double-checks the
+// payment with Stripe before this page says "You're booked!".
 import { api } from "./api.js";
 import { EVENT } from "../config.js";
 import {
-  STATUS_LABELS, buildIcs, downloadFile, escapeHtml, formatDate, formatTime,
+  STATUS_LABELS, buildIcs, downloadFile, escapeHtml, formatDate, formatMoney, formatTime,
 } from "./utils.js";
 
 const result = document.getElementById("result");
@@ -22,12 +24,21 @@ async function load() {
   const code = new URLSearchParams(location.search).get("code");
   if (!code) return showNotFound();
 
-  let b;
+  let b, checkoutUrl;
   try {
-    ({ booking: b } = await api(`/api/booking?code=${encodeURIComponent(code)}`));
+    ({ booking: b, checkoutUrl } = await api(`/api/booking?code=${encodeURIComponent(code)}`));
   } catch (err) {
     console.error(err);
     return showNotFound();
+  }
+
+  if (b.status === "pending_payment") return showPending(code, checkoutUrl);
+  if (b.status === "cancelled" && b.paymentStatus !== "paid") {
+    result.innerHTML = `
+      <h2 class="center">This booking wasn't completed</h2>
+      <p>Payment wasn't finished, so the window was released and nothing was charged.</p>
+      <p><a class="btn" href="index.html">Choose a time</a></p>`;
+    return;
   }
   const cancelled = b.status === "cancelled";
 
@@ -42,6 +53,7 @@ async function load() {
       <dt>Location</dt><dd>${escapeHtml(EVENT.location)}</dd>
       ${b.familyName ? `<dt>Family</dt><dd>${escapeHtml(b.familyName)}</dd>` : ""}
       <dt>Members</dt><dd>${Number(b.members)}</dd>
+      ${b.paymentStatus === "paid" ? `<dt>Paid</dt><dd>${escapeHtml(formatMoney(b.amountCents))}</dd>` : ""}
       <dt>Status</dt><dd><span class="badge ${escapeHtml(b.status)}">${STATUS_LABELS[b.status] ?? escapeHtml(b.status)}</span></dd>
     </dl>
     ${cancelled ? "" : `
@@ -62,6 +74,24 @@ async function load() {
     downloadFile(`christmas-in-focus-${b.code}.ics`, buildIcs(b), "text/calendar;charset=utf-8");
   });
   document.getElementById("save-btn")?.addEventListener("click", () => window.print());
+}
+
+// Just back from Stripe, the payment can take a few seconds to confirm.
+// Check again a few times before asking them to finish paying.
+let pendingChecks = 0;
+function showPending(code, checkoutUrl) {
+  const justPaid = new URLSearchParams(location.search).has("session_id");
+  if (justPaid && pendingChecks < 5) {
+    pendingChecks++;
+    result.innerHTML = `<p class="muted center">Confirming your payment…</p>`;
+    setTimeout(load, 2000);
+    return;
+  }
+  result.innerHTML = `
+    <h2 class="center">Payment not finished yet</h2>
+    <p>Your window is being held for a short time, but it isn't booked until payment is complete.</p>
+    ${checkoutUrl ? `<p><a class="btn" href="${escapeHtml(checkoutUrl)}">Finish paying</a></p>` : ""}
+    <p class="muted">Booking code: <strong>${escapeHtml(code)}</strong>. If you've already paid, refresh this page in a minute.</p>`;
 }
 
 load();

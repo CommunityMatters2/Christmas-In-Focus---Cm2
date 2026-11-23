@@ -3,12 +3,17 @@
 //    10 seconds and whenever the phone comes back to the tab.
 // 2. On submit, sends the form to /api/book. The server/database decides who
 //    gets the slot, so even two taps at the same instant can't double-book.
+// 3. The server answers with a Stripe Checkout link; we send the family there to pay.
+//    If they press "back" on Stripe, they return here with ?cancelled=CODE and we
+//    release the held slot straight away.
 import { api } from "./api.js";
 import { EVENT } from "../config.js";
-import { configSlots, escapeHtml, formatDate, formatTime } from "./utils.js";
+import { configSlots, escapeHtml, formatDate, formatMoney, formatTime } from "./utils.js";
 
 const $ = (id) => document.getElementById(id);
 const REFRESH_MS = 10000;
+const PRICE = formatMoney(EVENT.priceCents);
+const SUBMIT_TEXT = `Continue to payment (${PRICE})`;
 
 const allSlots = configSlots();
 let available = {};              // slotId -> true/false
@@ -22,10 +27,12 @@ function renderStatic() {
   const dates = EVENT.days.map((d) => d.label).join(" · ");
   $("info-strip").innerHTML = `
     <li><strong>${escapeHtml(dates)}</strong></li>
+    <li>${PRICE} per ${EVENT.sessionMinutes}-minute session</li>
     <li>${EVENT.photosPerFamily} digital photos per family</li>
     <li>Up to ${EVENT.maxMembers} family members</li>
     <li>${escapeHtml(EVENT.policy)}</li>`;
   $("slots-total").textContent = allSlots.length;
+  $("submit-btn").textContent = SUBMIT_TEXT;
 
   const members = $("members");
   for (let n = 1; n <= EVENT.maxMembers; n++) members.add(new Option(String(n), String(n)));
@@ -93,7 +100,7 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) refr
 function updateSummary() {
   const s = allSlots.find((x) => x.id === selectedId);
   $("selected-summary").innerHTML = s
-    ? `Your window: <strong>${escapeHtml(formatDate(s.date))} at ${escapeHtml(formatTime(s.time))}</strong>`
+    ? `Your window: <strong>${escapeHtml(formatDate(s.date))} at ${escapeHtml(formatTime(s.time))}</strong> · ${PRICE}`
     : `Please choose a time above.`;
   $("submit-btn").disabled = !s;
 }
@@ -136,11 +143,11 @@ $("booking-form").addEventListener("submit", async (e) => {
 
   $("form-error").textContent = "";
   $("submit-btn").disabled = true;
-  $("submit-btn").textContent = "Reserving…";
+  $("submit-btn").textContent = "Opening secure payment…";
   submitting = true;
 
   try {
-    const { code } = await api("/api/book", {
+    const { checkoutUrl } = await api("/api/book", {
       method: "POST",
       body: {
         slotId: selectedId,
@@ -153,10 +160,10 @@ $("booking-form").addEventListener("submit", async (e) => {
         policy: form.policy.checked,
       },
     });
-    location.href = `confirm.html?code=${encodeURIComponent(code)}`;
+    location.href = checkoutUrl; // Stripe's checkout page
   } catch (err) {
     submitting = false;
-    $("submit-btn").textContent = "Reserve my window";
+    $("submit-btn").textContent = SUBMIT_TEXT;
 
     if (err.kind === "taken") {
       available[selectedId] = false;
@@ -174,7 +181,20 @@ $("booking-form").addEventListener("submit", async (e) => {
   }
 });
 
+// Back from Stripe without paying → free the held slot now.
+async function handleCancelledCheckout() {
+  const code = new URLSearchParams(location.search).get("cancelled");
+  if (!code) return;
+  history.replaceState(null, "", location.pathname);
+  try {
+    await api("/api/release", { method: "POST", body: { code } });
+  } catch (err) {
+    console.error(err);
+  }
+  $("slot-message").textContent = "Payment wasn't completed, so nothing was charged and your window wasn't booked. You can choose a time and try again.";
+}
+
 renderStatic();
 renderTabs();
 updateSummary();
-refreshSlots();
+handleCancelledCheckout().finally(refreshSlots);

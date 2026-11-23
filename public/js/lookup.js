@@ -3,7 +3,7 @@
 // page never receives another family's details.
 import { api } from "./api.js";
 import { EVENT } from "../config.js";
-import { STATUS_LABELS, escapeHtml, formatDate, formatTime } from "./utils.js";
+import { STATUS_LABELS, escapeHtml, formatDate, formatTime, paymentLabel } from "./utils.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -31,6 +31,7 @@ $("lookup-form").addEventListener("submit", async (e) => {
         <dt>Time</dt><dd>${escapeHtml(formatTime(b.time))}</dd>
         <dt>Location</dt><dd>${escapeHtml(EVENT.location)}</dd>
         <dt>Members</dt><dd>${Number(b.members)}</dd>
+        <dt>Payment</dt><dd>${escapeHtml(paymentLabel(b))}</dd>
         <dt>Parent</dt><dd>${escapeHtml(b.parentName)}</dd>
         <dt>Phone</dt><dd>${escapeHtml(b.phone)}</dd>
       </dl>

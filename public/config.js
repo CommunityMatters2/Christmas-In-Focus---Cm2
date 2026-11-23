@@ -6,11 +6,12 @@
 // Never put secrets in this file. It's public.
 // =====================================================================
 
-const YEAR = 2026; // TODO: confirm the year
+const YEAR = 2026;
 
-// Default start times used for every day (24-hour "HH:MM").
-// TODO: replace with your real times. 8 times × 3 days = 24 windows.
-const DEFAULT_TIMES = ["10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30"];
+// Start times (24-hour "HH:MM"). Each window is `sessionMinutes` long.
+const EVENING = ["17:00", "17:30", "18:00", "18:30", "19:00", "19:30"];           // 5–8 pm
+const DAYTIME = ["10:00", "10:30", "11:00", "11:30",                               // 10 am–12 pm
+                 "13:00", "13:30", "14:00", "14:30", "15:00", "15:30"];            // 1–4 pm
 
 export const EVENT = {
   org: "Community Matters 2 Inc. (CM2)",
@@ -18,14 +19,19 @@ export const EVENT = {
   collection: "CM2 Christmas Collection",
   tagline: "Community Through Our Lens",
 
-  // Each day can override its times with its own `times: [...]` list.
   days: [
-    { date: `${YEAR}-12-10`, label: "Dec 10", times: DEFAULT_TIMES },
-    { date: `${YEAR}-12-11`, label: "Dec 11", times: DEFAULT_TIMES },
-    { date: `${YEAR}-12-13`, label: "Dec 13", times: DEFAULT_TIMES },
+    { date: `${YEAR}-12-10`, label: "Dec 10", times: EVENING },
+    { date: `${YEAR}-12-11`, label: "Dec 11", times: EVENING },
+    { date: `${YEAR}-12-13`, label: "Dec 13", times: DAYTIME },
   ],
 
-  sessionMinutes: 20,               // TODO: confirm session length
+  sessionMinutes: 30,
+
+  // Price per window, charged through Stripe Checkout when the family books.
+  // The server reads this too, so changing it here changes what Stripe charges.
+  priceCents: 2000,                 // $20.00
+  currency: "usd",
+
   location: "[LOCATION — e.g. CM2 Community Hall, 123 Main St]", // TODO
   photosPerFamily: 10,
   maxMembers: 7,

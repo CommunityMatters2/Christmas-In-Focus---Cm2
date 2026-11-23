@@ -10,6 +10,7 @@
     "node": "22.x"
   },
   "dependencies": {
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "stripe": "^23.2.0"
   }
 }

@@ -4,8 +4,10 @@
 //   POST { action: "logout" }             → clears it
 //   POST { action: "checkin", code }
 //   POST { action: "cancel",  code }      → frees the slot + email automatically
+//                                           (does NOT refund; staff refund in Stripe)
 //   POST { action: "notes",   code, notes }
 import { db } from "../lib/db.js";
+import { releaseHold } from "../lib/stripe.js";
 import { checkPassword, isAdmin, loginCookie, logoutCookie } from "../lib/auth.js";
 import { fail, json, readJson, route, toBooking } from "../lib/http.js";
 import { CODE_PATTERN, normalizeCode } from "../public/js/utils.js";
@@ -46,9 +48,19 @@ export const POST = route(async (request) => {
       UPDATE bookings SET status = 'checked_in', checked_in_at = now()
       WHERE code = ${code} AND status = 'booked' RETURNING *`;
   } else if (body.action === "cancel") {
-    rows = await sql`
-      UPDATE bookings SET status = 'cancelled', cancelled_at = now()
-      WHERE code = ${code} AND status <> 'cancelled' RETURNING *`;
+    // Unpaid hold: also close its Stripe checkout so it can't be paid afterwards.
+    const [hold] = await sql`
+      SELECT stripe_session_id FROM bookings WHERE code = ${code} AND status = 'pending_payment'`;
+    if (hold) {
+      if (!(await releaseHold(sql, code, hold.stripe_session_id))) {
+        return fail(409, "no_change", "That family is paying right now (or just paid), so it wasn't cancelled. Refresh and try again.");
+      }
+      rows = await sql`SELECT * FROM bookings WHERE code = ${code}`;
+    } else {
+      rows = await sql`
+        UPDATE bookings SET status = 'cancelled', cancelled_at = now()
+        WHERE code = ${code} AND status <> 'cancelled' RETURNING *`;
+    }
   } else if (body.action === "notes") {
     const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 200) : "";
     rows = await sql`UPDATE bookings SET notes = ${notes} WHERE code = ${code} RETURNING *`;

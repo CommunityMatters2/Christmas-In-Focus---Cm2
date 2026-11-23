@@ -5,7 +5,7 @@
 import { api } from "./api.js";
 import { EVENT } from "../config.js";
 import {
-  STATUS_LABELS, configSlots, dayLabel, downloadFile, escapeHtml, formatDate, formatTime,
+  STATUS_LABELS, configSlots, dayLabel, downloadFile, escapeHtml, formatDate, formatMoney, formatTime, paymentLabel,
 } from "./utils.js";
 
 const $ = (id) => document.getElementById(id);
@@ -80,8 +80,12 @@ function render() {
 
 function renderSummary() {
   const booked = bookings.filter(active);
+  const paid = bookings.filter((b) => b.paymentStatus === "paid");
+  const refunds = paid.filter((b) => b.status === "cancelled").length;
   const cards = [
     { num: booked.length, label: "Total booked" },
+    { num: formatMoney(paid.reduce((sum, b) => sum + (b.amountCents || 0), 0)), label: `Collected (${paid.length} paid)` },
+    ...(refunds ? [{ num: refunds, label: "Cancelled but paid: check refunds in Stripe" }] : []),
     { num: allSlots.length - booked.length, label: `Slots left (of ${allSlots.length})` },
     ...EVENT.days.map((d) => ({
       num: booked.filter((b) => b.date === d.date).length,
@@ -105,7 +109,7 @@ function renderTables() {
   $("day-tables").innerHTML = EVENT.days.map((day) => {
     const rows = bookings.filter((b) => b.date === day.date && matchesSearch(b, q)).sort(order);
     const body = rows.length ? rows.map(rowHtml).join("")
-      : `<tr><td colspan="9" class="muted">${q ? "No matches." : "No bookings yet."}</td></tr>`;
+      : `<tr><td colspan="10" class="muted">${q ? "No matches." : "No bookings yet."}</td></tr>`;
     return `
       <section class="day-section" aria-label="${escapeHtml(formatDate(day.date))}">
         <h2>${escapeHtml(formatDate(day.date))}</h2>
@@ -114,7 +118,7 @@ function renderTables() {
             <thead><tr>
               <th scope="col">Time</th><th scope="col">Family</th><th scope="col">Parent</th>
               <th scope="col">Phone</th><th scope="col">Email</th><th scope="col">Members</th>
-              <th scope="col">Code</th><th scope="col">Status</th><th scope="col">Actions</th>
+              <th scope="col">Code</th><th scope="col">Status</th><th scope="col">Payment</th><th scope="col">Actions</th>
             </tr></thead>
             <tbody>${body}</tbody>
           </table>
@@ -140,6 +144,7 @@ function rowHtml(b) {
       <td>${Number(b.members)}</td>
       <td><code>${code}</code></td>
       <td class="status-cell"><span class="badge ${escapeHtml(b.status)}">${STATUS_LABELS[b.status] ?? escapeHtml(b.status)}</span></td>
+      <td class="status-cell">${escapeHtml(paymentLabel(b))}</td>
       <td class="actions">${actions.join("")}</td>
     </tr>`;
 }
@@ -156,7 +161,10 @@ $("day-tables").addEventListener("click", async (e) => {
   const body = { action, code: b.code };
 
   if (action === "cancel") {
-    const ok = confirm(`Cancel ${b.code} (${b.parentName}, ${dayLabel(b.date)} ${formatTime(b.time)})?\nThis frees the slot for another family.`);
+    const refund = b.paymentStatus === "paid"
+      ? `\n\nThis does NOT refund the ${formatMoney(b.amountCents)}. To refund: Stripe → Payments → search ${b.code} → Refund.`
+      : "";
+    const ok = confirm(`Cancel ${b.code} (${b.parentName}, ${dayLabel(b.date)} ${formatTime(b.time)})?\nThis frees the slot for another family.${refund}`);
     if (!ok) return;
   }
   if (action === "notes") {
@@ -182,7 +190,7 @@ $("day-tables").addEventListener("click", async (e) => {
 
 // ---------- CSV export ----------
 $("export-btn").addEventListener("click", () => {
-  const cols = ["code", "status", "date", "time", "familyName", "parentName", "phone", "email", "members", "notes", "createdAt"];
+  const cols = ["code", "status", "payment", "amount", "date", "time", "familyName", "parentName", "phone", "email", "members", "notes", "createdAt", "stripePaymentIntent"];
   const cell = (v) => {
     let s = String(v ?? "");
     if (/^[=+\-@]/.test(s)) s = "'" + s; // stop spreadsheets running formulas
@@ -190,6 +198,8 @@ $("export-btn").addEventListener("click", () => {
   };
   const value = (b, c) => {
     if (c === "status") return STATUS_LABELS[b.status] ?? b.status;
+    if (c === "payment") return paymentLabel(b);
+    if (c === "amount") return b.paymentStatus === "paid" ? (b.amountCents / 100).toFixed(2) : "";
     if (c === "createdAt") return b.createdAt ? new Date(b.createdAt).toLocaleString() : "";
     return b[c];
   };

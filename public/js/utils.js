@@ -63,10 +63,22 @@ export function dayLabel(dateStr) {
 }
 
 export const STATUS_LABELS = {
+  pending_payment: "Awaiting payment",
   booked: "Booked",
   checked_in: "Checked-in",
   cancelled: "Cancelled",
 };
+
+export function formatMoney(cents, currency = EVENT.currency) {
+  return (Number(cents) / 100).toLocaleString("en-US", { style: "currency", currency: currency.toUpperCase() });
+}
+
+// Shown next to a booking's status: "Paid $20.00", or a warning for staff.
+export function paymentLabel(b) {
+  if (b.paymentStatus !== "paid") return b.status === "pending_payment" ? "Not paid yet" : "Unpaid";
+  const paid = `Paid ${formatMoney(b.amountCents ?? EVENT.priceCents)}`;
+  return b.status === "cancelled" ? `${paid} · refund?` : paid;
+}
 
 export function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => (

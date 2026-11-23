@@ -172,6 +172,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: var
 .badge.booked { background: #e4ede8; color: var(--evergreen); }
 .badge.checked_in { background: var(--navy); color: var(--ivory); }
 .badge.cancelled { background: #f6e3e6; color: #6d1e2b; }
+.badge.pending_payment { background: #fbf1dc; color: #6b4a0f; }
 
 .center { text-align: center; }
 .muted { color: var(--muted); }
