@@ -38,7 +38,13 @@ export const POST = route(async (request) => {
   const { slot, b, error } = validate(await readJson(request));
   if (error) return fail(400, "invalid", error);
 
-  stripe(); // fail fast (before holding a slot) if Stripe isn't configured
+  // Fail fast (before holding a slot) if Stripe isn't configured.
+  try {
+    stripe();
+  } catch (err) {
+    console.error(err.message);
+    return fail(503, "payments_not_configured", "Online payment isn't set up yet. Please try again later or contact us.");
+  }
   const sql = await db();
   await releaseStaleHolds(sql);
 
