@@ -37,8 +37,23 @@ export const EVENT = {
   location: "[LOCATION — e.g. CM2 Community Hall, 123 Main St]", // TODO
   photosPerFamily: 10,
   maxMembers: 7,
-  arriveEarlyMinutes: 10,
+  arriveEarlyMinutes: 15,
   policy: "No redos · No makeup sessions",
+  packageLabel: "digital photo package",
+
+  // "Good to know" rules. Shown on the home page, the confirmation page, and in
+  // the family's email. `icon` is an emoji; `text` is plain text (no HTML).
+  // If you change the price, arrive-early time or session length above, update the wording here too.
+  policies: [
+    { icon: "⏰", title: "Arrive 15 minutes early",
+      text: "Bring everyone who will be in the photo. There's no changing area, so come dressed and ready." },
+    { icon: "⌛", title: "Late? Your time still ends on schedule",
+      text: "Sessions run back-to-back. If you arrive late, you'll only get the time left in your 30-minute window." },
+    { icon: "💳", title: "Payment secures your window",
+      text: "Your window isn't held until your $20 is paid. Unpaid windows may be given to another family." },
+    { icon: "🚫", title: "Non-refundable",
+      text: "All payments are final. No redos or makeup sessions." },
+  ],
 
   contact: {
     phone: "[PHONE]", // TODO

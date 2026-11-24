@@ -33,7 +33,7 @@ function validate(body) {
   if (!Number.isInteger(b.members) || b.members < 1 || b.members > EVENT.maxMembers) return { error: `Family members must be 1–${EVENT.maxMembers}.` };
   if (b.familyName.length > 60) return { error: "Family name is too long (60 characters max)." };
   if (b.notes.length > 200) return { error: "Notes can be at most 200 characters." };
-  if (body.policy !== true) return { error: "Please confirm you understand there are no redos or makeup sessions." };
+  if (body.policy !== true) return { error: "Please tick the box to confirm you understand the booking rules." };
   return { slot, b };
 }
 

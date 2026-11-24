@@ -8,7 +8,7 @@
 import { api } from "./api.js";
 import { EVENT } from "../config.js";
 import { sparkle } from "./festive.js";
-import { configSlots, escapeHtml, footerHtml, formatDate, formatMoney, formatTime } from "./utils.js";
+import { configSlots, escapeHtml, footerHtml, formatDate, formatMoney, formatTime, policiesHtml } from "./utils.js";
 
 const $ = (id) => document.getElementById(id);
 const REFRESH_MS = 10000;
@@ -27,14 +27,16 @@ function renderStatic() {
   const dates = EVENT.days.map((d) => d.label).join(" · ");
   const items = [
     `<strong>${escapeHtml(dates)}</strong>`,
-    `${PRICE} per ${EVENT.sessionMinutes}-minute session`,
+    `<strong>${PRICE}</strong> ${escapeHtml(EVENT.packageLabel)} · ${EVENT.sessionMinutes}-minute session`,
     `${EVENT.photosPerFamily} digital photos per family`,
     `Up to ${EVENT.maxMembers} family members`,
   ];
   $("info-strip").innerHTML = items.map((html, i) => `<li style="--i:${i}">${html}</li>`).join("");
+  $("policies").innerHTML = policiesHtml();
   $("slots-total").textContent = allSlots.length;
   $("pay-note").textContent =
-    `After you book, we'll email your confirmation and a secure ${PRICE} Stripe payment link.`;
+    `After you book, we'll email your confirmation and a secure ${PRICE} Stripe payment link. ` +
+    `Your window is secured once payment is received.`;
 
   const members = $("members");
   for (let n = 1; n <= EVENT.maxMembers; n++) members.add(new Option(String(n), String(n)));

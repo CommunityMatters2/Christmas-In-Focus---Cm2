@@ -7,7 +7,7 @@ import { EVENT } from "../config.js";
 import { celebrate } from "./festive.js";
 import {
   STATUS_LABELS, buildIcs, downloadFile, escapeHtml, filled, footerHtml, formatDate, formatMoney,
-  formatTime, paymentUrl,
+  formatTime, paymentUrl, policiesHtml,
 } from "./utils.js";
 
 const result = document.getElementById("result");
@@ -28,7 +28,8 @@ function paymentBox(b) {
   return `
     <div class="pay-box">
       <h3>Please complete your ${amount} payment</h3>
-      <p>Pay securely through Stripe. Our office will confirm your payment by email or phone.</p>
+      <p><strong>Your window isn't secured until you pay.</strong> Unpaid windows may be given to another family.</p>
+      <p>Pay securely through Stripe. Payment is non-refundable. Our office will confirm your payment by email or phone.</p>
       <a class="btn cta block" href="${escapeHtml(paymentUrl(b.code))}" target="_blank" rel="noopener">Pay ${amount} now →</a>
     </div>`;
 }
@@ -74,12 +75,8 @@ async function load() {
     </div>
     <p class="muted no-print" style="font-size:.9rem">Tip: "Save" opens your print screen, where you can choose “Save as PDF”. A screenshot works too.</p>
     <h3>Before you come</h3>
-    <ul class="reminders">
-      <li>Arrive <strong>${EVENT.arriveEarlyMinutes} minutes early</strong>.</li>
-      <li>Wear <strong>coordinated outfits</strong>.</li>
-      <li>${EVENT.photosPerFamily} digital photos per family, up to ${EVENT.maxMembers} people.</li>
-      <li><strong>${escapeHtml(EVENT.policy)}</strong>.</li>
-    </ul>`}`;
+    <ul class="policies">${policiesHtml()}</ul>
+    <p class="muted" style="font-size:.95rem">Wear coordinated outfits. ${EVENT.photosPerFamily} digital photos per family, up to ${EVENT.maxMembers} people.</p>`}`;
 
   document.getElementById("ics-btn")?.addEventListener("click", () => {
     downloadFile(`christmas-in-focus-${b.code}.ics`, buildIcs(b), "text/calendar;charset=utf-8");

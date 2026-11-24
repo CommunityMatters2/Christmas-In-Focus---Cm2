@@ -93,6 +93,14 @@ export function footerHtml({ withOrg = false } = {}) {
   return `${withOrg ? `<p>${orgLine}</p>` : ""}${contact ? `<p>Questions? ${contact}</p>` : ""}`;
 }
 
+// The "Good to know" rules from config.js as <li> items (home + confirmation pages).
+export function policiesHtml() {
+  return EVENT.policies.map((p, i) => `<li style="--i:${i}">
+    <span class="policy-icon" aria-hidden="true">${escapeHtml(p.icon)}</span>
+    <span><strong>${escapeHtml(p.title)}</strong><br>${escapeHtml(p.text)}</span>
+  </li>`).join("");
+}
+
 // The Stripe payment link, tagged with the booking code so staff can match the
 // payment in Stripe (it shows as the payment's "client reference ID").
 export function paymentUrl(code, email) {
@@ -134,8 +142,7 @@ export function buildIcs(booking) {
   const description = [
     `Booking code: ${booking.code}`,
     `Family members: ${booking.members}`,
-    `Please arrive ${EVENT.arriveEarlyMinutes} minutes early in coordinated outfits.`,
-    `${EVENT.policy}.`,
+    ...EVENT.policies.map((p) => `${p.title}: ${p.text}`),
     `Questions: ${EVENT.contact.phone} / ${EVENT.contact.email}`,
   ].join("\n");
 

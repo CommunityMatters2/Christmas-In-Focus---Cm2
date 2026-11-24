@@ -180,6 +180,28 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: var
 .center { text-align: center; }
 .muted { color: var(--muted); }
 
+/* ---------- flyer ---------- */
+.flyer { margin: 0 auto 1.5rem; max-width: 520px; text-align: center; }
+.flyer a { display: block; border-radius: var(--radius); overflow: hidden; border: 2px solid var(--gold);
+  box-shadow: 0 10px 30px rgba(23, 32, 54, .18); transition: transform .2s ease, box-shadow .2s ease; }
+.flyer a:hover { transform: translateY(-2px); box-shadow: 0 14px 36px rgba(23, 32, 54, .24); }
+.flyer img { display: block; width: 100%; height: auto; }
+.flyer figcaption { font-size: .85rem; color: var(--muted); margin-top: .5rem; }
+
+/* ---------- "good to know" rules ---------- */
+.policies-card, body.festive .policies-card { border: 2px solid var(--cranberry); }
+body.festive .flyer figcaption { color: rgba(246, 239, 226, .85); }
+body.festive .flyer { animation: rise .7s cubic-bezier(.2, .7, .2, 1) both; }
+.policies-card h2 { color: var(--cranberry); }
+.policies { list-style: none; margin: .5rem 0 1rem; padding: 0; display: grid; gap: .75rem; }
+.policies li {
+  display: flex; gap: .8rem; align-items: flex-start; padding: .8rem 1rem;
+  background: #fff; border: 1px solid #eadfca; border-left: 4px solid var(--cranberry); border-radius: 8px;
+  font-size: .97rem;
+}
+.policies li strong { font-family: var(--font-head); color: var(--navy); }
+.policy-icon { font-size: 1.4rem; line-height: 1.2; flex: none; }
+
 /* ---------- footer ---------- */
 .site-footer { text-align: center; padding: 1.5rem 16px 2.5rem; font-size: .9rem; color: var(--muted); }
 
@@ -370,6 +392,7 @@ canvas.confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-
 @media (min-width: 600px) {
   .site-header h1 { font-size: 2.8rem; }
   .info-strip { grid-template-columns: repeat(2, 1fr); }
+  .policies-card .policies { grid-template-columns: repeat(2, 1fr); }
   .slot-grid { grid-template-columns: repeat(4, 1fr); }
   .card { padding: 2rem; }
   .summary { grid-template-columns: repeat(5, 1fr); }
