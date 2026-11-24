@@ -88,8 +88,7 @@ Open `public/config.js` and replace every `TODO`: the year, the slot times, sess
 1. Resend → **API Keys** → **Create API key** (Sending access) → copy it (`re_…`).
 2. Vercel → Settings → Environment Variables → add **`RESEND_API_KEY`** (exactly that name) → Redeploy.
 3. Admin page → **Send test email**. It should arrive at the office inbox.
-4. **Before going live, verify the domain** so families receive emails too: Resend → **Domains** → **Add domain** → `communitymatters2.org`. Resend shows a few DNS records (TXT/MX). Whoever manages the domain's DNS adds them, then click **Verify**. Then add **`EMAIL_FROM`** = `CM2 Christmas in Focus <bookings@communitymatters2.org>` in Vercel and redeploy.
-   Until the domain is verified, Resend only delivers to the email address that owns the Resend account, so families get nothing.
+4. Emails are sent from `bookings@communitymatters2.org`. This works because `communitymatters2.org` is **verified** in Resend → Domains. If that ever stops being verified, emails to families will fail. (To use a different sender, set `EMAIL_FROM` in Vercel.)
 
 ### 3. Code on GitHub
 The code lives at <https://github.com/CommunityMatters2/Christmas-In-Focus---Cm2>. To publish changes:
