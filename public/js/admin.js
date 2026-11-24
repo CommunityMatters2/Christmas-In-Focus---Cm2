@@ -2,6 +2,10 @@
 // Logs in through /api/admin (the server sets a secure cookie), then loads all
 // bookings and refreshes them every 15 seconds. Every button calls the server;
 // the server re-checks the login cookie on every request.
+//
+// Payments: families pay through the Stripe payment link in their email. Staff
+// find the payment in Stripe (the booking code is its "client reference ID")
+// and press "Mark paid" here.
 import { api } from "./api.js";
 import { EVENT } from "../config.js";
 import {
@@ -29,7 +33,10 @@ function flash(text) {
 // ---------- data ----------
 async function loadBookings() {
   try {
-    ({ bookings } = await api("/api/admin"));
+    let emailConfigured;
+    ({ bookings, emailConfigured } = await api("/api/admin"));
+    $("email-warning").textContent = emailConfigured ? "" :
+      "Booking emails are OFF: RESEND_API_KEY isn't set in Vercel. Families are booked but get no email. Add the key, then redeploy.";
     show("dash-view");
     $("updated").textContent = `last updated ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}`;
     render();
@@ -82,10 +89,14 @@ function renderSummary() {
   const booked = bookings.filter(active);
   const paid = bookings.filter((b) => b.paymentStatus === "paid");
   const refunds = paid.filter((b) => b.status === "cancelled").length;
+  const due = booked.filter((b) => b.paymentStatus !== "paid").length;
+  const emailProblems = booked.filter((b) => b.emailError).length;
   const cards = [
     { num: booked.length, label: "Total booked" },
-    { num: formatMoney(paid.reduce((sum, b) => sum + (b.amountCents || 0), 0)), label: `Collected (${paid.length} paid)` },
+    { num: formatMoney(paid.reduce((sum, b) => sum + (b.amountCents || 0), 0)), label: `Marked paid (${paid.length})` },
+    { num: due, label: "Waiting for payment" },
     ...(refunds ? [{ num: refunds, label: "Cancelled but paid: check refunds in Stripe" }] : []),
+    ...(emailProblems ? [{ num: emailProblems, label: "Email problems: press Resend" }] : []),
     { num: allSlots.length - booked.length, label: `Slots left (of ${allSlots.length})` },
     ...EVENT.days.map((d) => ({
       num: booked.filter((b) => b.date === d.date).length,
@@ -109,7 +120,7 @@ function renderTables() {
   $("day-tables").innerHTML = EVENT.days.map((day) => {
     const rows = bookings.filter((b) => b.date === day.date && matchesSearch(b, q)).sort(order);
     const body = rows.length ? rows.map(rowHtml).join("")
-      : `<tr><td colspan="10" class="muted">${q ? "No matches." : "No bookings yet."}</td></tr>`;
+      : `<tr><td colspan="11" class="muted">${q ? "No matches." : "No bookings yet."}</td></tr>`;
     return `
       <section class="day-section" aria-label="${escapeHtml(formatDate(day.date))}">
         <h2>${escapeHtml(formatDate(day.date))}</h2>
@@ -118,7 +129,7 @@ function renderTables() {
             <thead><tr>
               <th scope="col">Time</th><th scope="col">Family</th><th scope="col">Parent</th>
               <th scope="col">Phone</th><th scope="col">Email</th><th scope="col">Members</th>
-              <th scope="col">Code</th><th scope="col">Status</th><th scope="col">Payment</th><th scope="col">Actions</th>
+              <th scope="col">Code</th><th scope="col">Status</th><th scope="col">Payment</th><th scope="col">Emails</th><th scope="col">Actions</th>
             </tr></thead>
             <tbody>${body}</tbody>
           </table>
@@ -134,6 +145,19 @@ function rowHtml(b) {
   if (b.status !== "cancelled") actions.push(`<button class="btn small danger" data-action="cancel" data-code="${code}">Cancel</button>`);
   actions.push(`<button class="btn small secondary" data-action="notes" data-code="${code}">Edit notes</button>`);
 
+  const isPaid = b.paymentStatus === "paid";
+  const payment = `<span class="badge ${isPaid ? "paid" : b.status === "cancelled" ? "" : "due"}">${escapeHtml(paymentLabel(b))}</span>
+    ${b.status === "cancelled" && !isPaid ? "" : isPaid
+      ? `<br><button class="btn small secondary" data-action="unpaid" data-code="${code}">Undo paid</button>`
+      : `<br><button class="btn small" data-action="paid" data-code="${code}">Mark paid</button>`}`;
+
+  const emailState = b.emailError
+    ? `<span class="badge warn" title="${escapeHtml(b.emailError)}">⚠ Failed</span><br><small class="muted">${escapeHtml(b.emailError)}</small>`
+    : b.familyEmailedAt && b.officeEmailedAt ? `<span class="badge paid">✓ Sent</span>`
+    : `<span class="badge due">Not sent</span>`;
+  const emails = `${emailState}${b.status === "cancelled" ? ""
+    : `<br><button class="btn small secondary" data-action="resend" data-code="${code}">Resend</button>`}`;
+
   return `
     <tr class="${b.status === "cancelled" ? "is-cancelled" : ""}">
       <td>${escapeHtml(formatTime(b.time))}</td>
@@ -144,7 +168,8 @@ function rowHtml(b) {
       <td>${Number(b.members)}</td>
       <td><code>${code}</code></td>
       <td class="status-cell"><span class="badge ${escapeHtml(b.status)}">${STATUS_LABELS[b.status] ?? escapeHtml(b.status)}</span></td>
-      <td class="status-cell">${escapeHtml(paymentLabel(b))}</td>
+      <td class="status-cell">${payment}</td>
+      <td class="status-cell">${emails}</td>
       <td class="actions">${actions.join("")}</td>
     </tr>`;
 }
@@ -167,6 +192,8 @@ $("day-tables").addEventListener("click", async (e) => {
     const ok = confirm(`Cancel ${b.code} (${b.parentName}, ${dayLabel(b.date)} ${formatTime(b.time)})?\nThis frees the slot for another family.${refund}`);
     if (!ok) return;
   }
+  if (action === "unpaid" && !confirm(`Mark ${b.code} as NOT paid?`)) return;
+  if (action === "resend" && !confirm(`Send the confirmation + payment link to ${b.email} again, and copy the office?`)) return;
   if (action === "notes") {
     const next = prompt(`Notes for ${b.code} (max 200 characters):`, b.notes || "");
     if (next === null) return;
@@ -180,6 +207,9 @@ $("day-tables").addEventListener("click", async (e) => {
       checkin: `${b.familyName || b.parentName} checked in.`,
       cancel: `${b.code} cancelled. The ${formatTime(b.time)} slot on ${dayLabel(b.date)} is open again.`,
       notes: `Notes updated for ${b.code}.`,
+      paid: `${b.code} marked as paid.`,
+      unpaid: `${b.code} marked as not paid.`,
+      resend: `Emails sent again to ${b.email} and the office.`,
     }[action]);
   } catch (err) {
     flash(`That didn't save: ${err.message}`);
@@ -188,9 +218,23 @@ $("day-tables").addEventListener("click", async (e) => {
   await loadBookings();
 });
 
+// ---------- test email ----------
+$("test-email-btn").addEventListener("click", async () => {
+  const btn = $("test-email-btn");
+  btn.disabled = true;
+  try {
+    const { to } = await api("/api/admin", { method: "POST", body: { action: "testemail" } });
+    flash(`Test email sent to ${to}. Check that inbox (and spam).`);
+  } catch (err) {
+    flash(err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ---------- CSV export ----------
 $("export-btn").addEventListener("click", () => {
-  const cols = ["code", "status", "payment", "amount", "date", "time", "familyName", "parentName", "phone", "email", "members", "notes", "createdAt", "stripePaymentIntent"];
+  const cols = ["code", "status", "payment", "amount", "date", "time", "familyName", "parentName", "phone", "email", "members", "notes", "emails", "createdAt"];
   const cell = (v) => {
     let s = String(v ?? "");
     if (/^[=+\-@]/.test(s)) s = "'" + s; // stop spreadsheets running formulas
@@ -200,6 +244,7 @@ $("export-btn").addEventListener("click", () => {
     if (c === "status") return STATUS_LABELS[b.status] ?? b.status;
     if (c === "payment") return paymentLabel(b);
     if (c === "amount") return b.paymentStatus === "paid" ? (b.amountCents / 100).toFixed(2) : "";
+    if (c === "emails") return b.emailError ? `Failed: ${b.emailError}` : b.familyEmailedAt ? "Sent" : "Not sent";
     if (c === "createdAt") return b.createdAt ? new Date(b.createdAt).toLocaleString() : "";
     return b[c];
   };

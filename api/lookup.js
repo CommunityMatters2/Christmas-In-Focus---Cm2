@@ -17,6 +17,7 @@ export const POST = route(async (request) => {
   const [row] = await sql`SELECT * FROM bookings WHERE code = ${code} AND email = ${email}`;
   if (!row) return fail(404, "not_found", NOT_FOUND);
 
-  const { notes, ...booking } = toBooking(row); // staff notes stay internal
+  // Staff notes and email delivery details stay internal.
+  const { notes, emailError, familyEmailedAt, officeEmailedAt, ...booking } = toBooking(row);
   return json({ booking });
 });

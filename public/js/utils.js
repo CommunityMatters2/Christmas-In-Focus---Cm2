@@ -63,7 +63,7 @@ export function dayLabel(dateStr) {
 }
 
 export const STATUS_LABELS = {
-  pending_payment: "Awaiting payment",
+  pending_payment: "Booked",
   booked: "Booked",
   checked_in: "Checked-in",
   cancelled: "Cancelled",
@@ -73,11 +73,33 @@ export function formatMoney(cents, currency = EVENT.currency) {
   return (Number(cents) / 100).toLocaleString("en-US", { style: "currency", currency: currency.toUpperCase() });
 }
 
-// Shown next to a booking's status: "Paid $20.00", or a warning for staff.
+// "Paid $20.00" / "$20.00 due" (+ a refund reminder for staff on cancelled paid bookings).
 export function paymentLabel(b) {
-  if (b.paymentStatus !== "paid") return b.status === "pending_payment" ? "Not paid yet" : "Unpaid";
-  const paid = `Paid ${formatMoney(b.amountCents ?? EVENT.priceCents)}`;
-  return b.status === "cancelled" ? `${paid} · refund?` : paid;
+  const amount = formatMoney(b.amountCents ?? EVENT.priceCents);
+  if (b.paymentStatus !== "paid") return b.status === "cancelled" ? "Not paid" : `${amount} due`;
+  return b.status === "cancelled" ? `Paid ${amount} · refund?` : `Paid ${amount}`;
+}
+
+// config.js values still showing "[PLACEHOLDER]" are treated as not set.
+export const filled = (v) => Boolean(v) && !String(v).trim().startsWith("[");
+
+export function footerHtml({ withOrg = false } = {}) {
+  const { phone, email } = EVENT.contact;
+  const orgLine = [EVENT.org, filled(EVENT.location) ? EVENT.location : ""].filter(Boolean).map(escapeHtml).join(" · ");
+  const contact = [
+    filled(phone) ? `<a href="tel:${escapeHtml(phone)}">${escapeHtml(phone)}</a>` : "",
+    filled(email) ? `<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>` : "",
+  ].filter(Boolean).join(" · ");
+  return `${withOrg ? `<p>${orgLine}</p>` : ""}${contact ? `<p>Questions? ${contact}</p>` : ""}`;
+}
+
+// The Stripe payment link, tagged with the booking code so staff can match the
+// payment in Stripe (it shows as the payment's "client reference ID").
+export function paymentUrl(code, email) {
+  const url = new URL(EVENT.paymentLink);
+  url.searchParams.set("client_reference_id", code);
+  if (email) url.searchParams.set("prefilled_email", email);
+  return url.toString();
 }
 
 export function escapeHtml(value) {

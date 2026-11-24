@@ -1,12 +1,15 @@
-// POST /api/book — create one booking and start payment.
-// The server re-checks every field (never trust the browser), then inserts the
-// booking as `pending_payment`, which holds the slot. If the slot or email is
-// already used, the database's unique rules reject the insert. That's how two
-// parents can never get the same slot.
-// Then it creates a Stripe Checkout page and returns its URL; the browser goes there.
-import { db, releaseStaleHolds, uniqueViolation } from "../lib/db.js";
+// POST /api/book — create one booking, then email the family and the office.
+// The server re-checks every field (never trust the browser), then inserts.
+// If the slot or email is already used, the database's unique rules reject
+// the insert. That's how two parents can never get the same slot.
+//
+// After booking, two emails go out (lib/email.js):
+//   • the family gets their confirmation + the $20 Stripe payment link
+//   • the office gets the booking details
+// The booking stands even if an email fails; staff can resend from the admin page.
+import { db, uniqueViolation } from "../lib/db.js";
+import { sendBookingEmails } from "../lib/email.js";
 import { fail, json, readJson, route } from "../lib/http.js";
-import { createCheckout, releaseHold, stripe } from "../lib/stripe.js";
 import { EVENT } from "../public/config.js";
 import { configSlots, makeBookingCode, normalizeEmail } from "../public/js/utils.js";
 
@@ -38,54 +41,38 @@ export const POST = route(async (request) => {
   const { slot, b, error } = validate(await readJson(request));
   if (error) return fail(400, "invalid", error);
 
-  // Fail fast (before holding a slot) if Stripe isn't configured.
-  try {
-    stripe();
-  } catch (err) {
-    console.error(err.message);
-    return fail(503, "payments_not_configured", "Online payment isn't set up yet. Please try again later or contact us.");
-  }
   const sql = await db();
-  await releaseStaleHolds(sql);
-
-  let code = null;
-  for (let attempt = 0; attempt < 5 && !code; attempt++) {
-    const candidate = makeBookingCode();
+  let row = null;
+  for (let attempt = 0; attempt < 5 && !row; attempt++) {
+    const code = makeBookingCode();
     try {
-      await sql`
+      [row] = await sql`
         INSERT INTO bookings (code, slot_id, date, time, parent_name, email, phone, members,
                               family_name, notes, status, amount_cents)
-        VALUES (${candidate}, ${slot.id}, ${slot.date}, ${slot.time}, ${b.parentName}, ${b.email},
-                ${b.phone}, ${b.members}, ${b.familyName}, ${b.notes}, 'pending_payment', ${EVENT.priceCents})`;
-      code = candidate;
+        VALUES (${code}, ${slot.id}, ${slot.date}, ${slot.time}, ${b.parentName}, ${b.email},
+                ${b.phone}, ${b.members}, ${b.familyName}, ${b.notes}, 'booked', ${EVENT.priceCents})
+        RETURNING *`;
     } catch (err) {
       const rule = uniqueViolation(err);
       if (rule === "bookings_one_per_slot") {
         return fail(409, "taken", "So sorry — another family just reserved that window. Please pick another time.");
       }
       if (rule === "bookings_one_per_email") {
-        // Same email with an unfinished checkout (e.g. they closed the Stripe tab
-        // and came back)? Close that old checkout and let them start again.
-        const [old] = await sql`
-          SELECT code, stripe_session_id FROM bookings
-          WHERE email = ${b.email} AND status = 'pending_payment'`;
-        if (old && attempt === 0 && await releaseHold(sql, old.code, old.stripe_session_id)) continue;
         return fail(409, "duplicate", "This email already has a booking — each family may book one window.");
       }
       if (rule === "bookings_pkey") continue; // random code collided; try a new one
       throw err;
     }
   }
-  if (!code) throw new Error("Could not create the booking");
+  if (!row) throw new Error("Could not generate a unique booking code");
 
-  let session;
+  // Wait for the emails so they finish before this function stops. A failure is
+  // saved on the booking and never undoes it.
+  let emailed = false;
   try {
-    session = await createCheckout(request, { code, slot, ...b });
+    ({ familySent: emailed } = await sendBookingEmails(sql, row, request, { firstSend: true }));
   } catch (err) {
-    // Couldn't reach Stripe: give the slot back straight away.
-    await sql`UPDATE bookings SET status = 'cancelled', cancelled_at = now() WHERE code = ${code}`;
-    throw err;
+    console.error(`Emails for ${row.code} failed:`, err);
   }
-  await sql`UPDATE bookings SET stripe_session_id = ${session.id} WHERE code = ${code}`;
-  return json({ code, checkoutUrl: session.url }, 201);
+  return json({ code: row.code, emailed }, 201);
 });

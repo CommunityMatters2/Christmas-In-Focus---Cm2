@@ -27,10 +27,12 @@ export const EVENT = {
 
   sessionMinutes: 30,
 
-  // Price per window, charged through Stripe Checkout when the family books.
-  // The server reads this too, so changing it here changes what Stripe charges.
-  priceCents: 2000,                 // $20.00
+  // Price per window. Families pay through the Stripe payment link below, which is
+  // emailed to them (and shown on their confirmation page) after they book.
+  // Staff check payments in Stripe and press "Mark paid" on the admin page.
+  priceCents: 2000,                 // $20.00 (must match the Stripe payment link's price)
   currency: "usd",
+  paymentLink: "https://book.stripe.com/dRm5kCcEQ8tVbAq3AIdIA0d",
 
   location: "[LOCATION — e.g. CM2 Community Hall, 123 Main St]", // TODO
   photosPerFamily: 10,
@@ -40,6 +42,6 @@ export const EVENT = {
 
   contact: {
     phone: "[PHONE]", // TODO
-    email: "[EMAIL]", // TODO
+    email: "info@communitymatters2.org",
   },
 };

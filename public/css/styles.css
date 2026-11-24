@@ -172,7 +172,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: var
 .badge.booked { background: #e4ede8; color: var(--evergreen); }
 .badge.checked_in { background: var(--navy); color: var(--ivory); }
 .badge.cancelled { background: #f6e3e6; color: #6d1e2b; }
-.badge.pending_payment { background: #fbf1dc; color: #6b4a0f; }
+.badge.pending_payment { background: #e4ede8; color: var(--evergreen); }
+.badge.paid { background: #e4ede8; color: var(--evergreen); }
+.badge.due { background: #fbf1dc; color: #6b4a0f; }
+.badge.warn { background: #f6e3e6; color: #6d1e2b; }
 
 .center { text-align: center; }
 .muted { color: var(--muted); }
@@ -198,12 +201,163 @@ td.actions .btn { margin: 0 .25rem .25rem 0; }
 .day-section { margin-bottom: 2rem; }
 details.setup summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 500; }
 
+/* =====================================================================
+   FESTIVE THEME — pages with <body class="festive"> (booking, confirm, lookup).
+   A winter-night sky with falling snow (js/festive.js), a string of lights
+   under the header, and gentle motion. Staff pages stay plain.
+   ===================================================================== */
+body.festive {
+  background:
+    radial-gradient(ellipse 80% 45% at 50% 0%, rgba(201, 168, 106, .20), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 0% 100%, rgba(47, 84, 68, .55), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(142, 44, 59, .35), transparent 70%),
+    linear-gradient(180deg, #0f1628 0%, #172036 45%, #1a2a33 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+/* Snow sits behind everything; content above it. Neither ever blocks taps. */
+canvas.snow { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+body.festive > header, body.festive > main, body.festive > footer { position: relative; z-index: 1; }
+
+body.festive .site-header { background: transparent; border-bottom: 0; padding-bottom: 2.6rem; position: relative; z-index: 2; overflow-x: clip; }
+body.festive .site-header .logo { box-shadow: 0 0 0 3px rgba(201, 168, 106, .55), 0 0 28px rgba(232, 207, 152, .35); animation: glow 4s ease-in-out infinite; }
+
+/* Shimmering gold "in Focus" */
+body.festive .site-header .script {
+  background: linear-gradient(100deg, #C9A86A 20%, #FFF1C9 40%, #C9A86A 60%) 0 0 / 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: shimmer 5s linear infinite; padding: 0 .1em;
+}
+
+/* String of lights (bulbs added by festive.js) */
+.lights {
+  position: absolute; left: 0; right: 0; bottom: -6px; height: 30px;
+  display: flex; justify-content: space-around; pointer-events: none;
+}
+.lights::before {
+  content: ""; position: absolute; left: -2%; right: -2%; top: 0; height: 12px;
+  border-bottom: 2px solid rgba(201, 168, 106, .55);
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
+}
+.lights i {
+  position: relative; width: 9px; height: 14px; margin-top: 9px;
+  border-radius: 50% 50% 45% 45% / 60% 60% 40% 40%;
+  background: var(--bulb); box-shadow: 0 0 10px 2px var(--bulb);
+  animation: twinkle 1.9s ease-in-out var(--d) infinite;
+}
+.lights i:nth-child(odd) { margin-top: 12px; }
+.lights i::before { content: ""; position: absolute; left: 2px; top: -3px; width: 5px; height: 4px; border-radius: 1px; background: #8a7a58; }
+.lights i:nth-child(4n+1) { --bulb: #ff5a6a; }
+.lights i:nth-child(4n+2) { --bulb: #ffd36e; }
+.lights i:nth-child(4n+3) { --bulb: #6fe0a0; }
+.lights i:nth-child(4n+4) { --bulb: #fff6dc; }
+
+/* Text that sits straight on the night sky */
+body.festive .info-strip {
+  color: var(--ivory); border-color: rgba(201, 168, 106, .55);
+  background: rgba(15, 22, 40, .45); border-radius: var(--radius);
+  border-style: solid; border-width: 1px; backdrop-filter: blur(2px);
+}
+body.festive .info-strip li { animation: rise .6s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 70ms + 150ms); }
+body.festive main > p.center, body.festive .site-footer { color: rgba(246, 239, 226, .85); }
+body.festive main > p.center a, body.festive .site-footer a { color: #E8CF98; }
+
+/* Cards: rise in, with a ribbon along the top */
+body.festive .card {
+  position: relative; overflow: hidden;
+  border: 1px solid rgba(201, 168, 106, .8);
+  box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .04);
+  animation: rise .7s cubic-bezier(.2, .7, .2, 1) both;
+}
+body.festive .card::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 5px;
+  background: repeating-linear-gradient(135deg, var(--cranberry) 0 10px, #fff 10px 14px, var(--evergreen) 14px 24px, #fff 24px 28px);
+  opacity: .9;
+}
+body.festive main > .card:nth-of-type(2) { animation-delay: .12s; }
+
+/* Day tabs */
+body.festive .day-tab { transition: background .25s, color .25s, transform .2s, box-shadow .25s; }
+body.festive .day-tab:hover { transform: translateY(-1px); }
+body.festive .day-tab[aria-pressed="true"] { box-shadow: 0 6px 16px -8px rgba(23, 32, 54, .8); }
+
+/* Time buttons: stagger in, lift on hover, glow + pop when chosen */
+.slot-grid.stagger .slot { animation: pop-in .45s cubic-bezier(.2, .9, .3, 1.3) both; animation-delay: calc(var(--i, 0) * 40ms); }
+body.festive .slot { position: relative; transition: transform .18s, box-shadow .2s, border-color .2s, background .2s; }
+body.festive .slot:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 18px -10px rgba(23, 32, 54, .6); }
+body.festive .slot[aria-pressed="true"] {
+  background: linear-gradient(160deg, #3a6a55, var(--evergreen));
+  box-shadow: 0 0 0 3px rgba(201, 168, 106, .65), 0 10px 22px -10px rgba(47, 84, 68, .9);
+  animation: chosen .45s cubic-bezier(.2, .9, .3, 1.4);
+}
+body.festive .slot[aria-pressed="true"] .tag::before { content: "✓ "; }
+body.festive .slot:not(:disabled):not([aria-pressed="true"]) .tag::before { content: "❄ "; color: #9ab3cc; }
+
+/* Main call-to-action: cranberry with a light sweep */
+.btn.cta {
+  position: relative; overflow: hidden; font-size: 1.08rem;
+  background: linear-gradient(160deg, #a63848, var(--cranberry)); border-color: var(--cranberry);
+  box-shadow: 0 10px 22px -12px rgba(142, 44, 59, .9);
+}
+.btn.cta:hover:not(:disabled) { background: linear-gradient(160deg, #b23e4f, #7d2533); }
+.btn.cta::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -60%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .35), transparent);
+  transform: skewX(-20deg); animation: sweep 3.6s ease-in-out infinite;
+}
+.btn.cta:disabled::after { display: none; }
+.btn .spin { display: inline-block; animation: spin 1.2s linear infinite; }
+
+/* Payment box (confirm + lookup) */
+.pay-box {
+  border: 1px solid var(--gold); background: #fbf1dc; border-radius: 10px;
+  padding: 1rem 1.1rem; margin: 1rem 0 1.25rem;
+}
+.pay-box h3 { margin-bottom: .25rem; }
+.pay-box p { color: var(--muted); font-size: .95rem; }
+.pay-box.paid { background: #e4ede8; border-color: #a9c2b5; }
+
+/* Confirmation: gift-wrapped booking code + bouncing ornament */
+.celebrate-icon { display: block; font-size: 2.6rem; text-align: center; margin-bottom: .25rem; animation: bounce-in .8s cubic-bezier(.2, .9, .3, 1.4) both .2s; }
+body.festive .booking-code {
+  position: relative; background: var(--ivory);
+  border: 2px dashed var(--gold);
+  animation: unwrap .7s cubic-bezier(.2, .9, .3, 1.3) both .35s;
+}
+.email-note { display: flex; gap: .6rem; align-items: flex-start; font-size: .95rem; }
+
+/* Sparkles (made by festive.js) */
+.sparkle {
+  position: fixed; z-index: 60; pointer-events: none; font-size: 14px; line-height: 1;
+  transform: translate(-50%, -50%); animation: burst .75s ease-out forwards;
+}
+canvas.confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(8px) scale(.92); } to { opacity: 1; transform: none; } }
+@keyframes chosen { 0% { transform: scale(.94); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes twinkle { 0%, 100% { opacity: 1; filter: brightness(1.15); } 50% { opacity: .35; filter: brightness(.7); box-shadow: 0 0 3px 0 var(--bulb); } }
+@keyframes shimmer { to { background-position: -250% 0; } }
+@keyframes glow { 50% { box-shadow: 0 0 0 3px rgba(201, 168, 106, .8), 0 0 40px rgba(232, 207, 152, .55); } }
+@keyframes sweep { 0%, 55% { left: -60%; } 100% { left: 130%; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes burst { from { opacity: 1; transform: translate(-50%, -50%) scale(.6); } to { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1) rotate(90deg); } }
+@keyframes bounce-in { 0% { opacity: 0; transform: translateY(-30px) scale(.6); } 60% { opacity: 1; transform: translateY(4px) scale(1.1); } 100% { transform: none; } }
+@keyframes unwrap { from { opacity: 0; transform: scale(.85) rotate(-2deg); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  body.festive .site-header .script { color: var(--gold); background: none; }
+}
+
 /* ---------- print ---------- */
 .print-only { display: none; }
 
 @media print {
   body { background: #fff; }
-  .site-header, .site-footer, .no-print, .btn { display: none !important; }
+  .site-header, .site-footer, .no-print, .btn, canvas, .sparkle { display: none !important; }
+  body.festive { background: #fff; }
+  body.festive .card { animation: none; }
   main { padding: 0; max-width: none; }
   .card { border: none; box-shadow: none; padding: 0; }
   body.printing-sheet main > *:not(#print-sheet) { display: none !important; }

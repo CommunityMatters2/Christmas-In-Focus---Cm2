@@ -3,13 +3,13 @@
 // page never receives another family's details.
 import { api } from "./api.js";
 import { EVENT } from "../config.js";
-import { STATUS_LABELS, escapeHtml, formatDate, formatTime, paymentLabel } from "./utils.js";
+import {
+  STATUS_LABELS, escapeHtml, filled, footerHtml, formatDate, formatTime, paymentLabel, paymentUrl,
+} from "./utils.js";
 
 const $ = (id) => document.getElementById(id);
 
-$("footer").innerHTML = `
-  <p>Questions? ${escapeHtml(EVENT.contact.phone)} ·
-  <a href="mailto:${escapeHtml(EVENT.contact.email)}">${escapeHtml(EVENT.contact.email)}</a></p>`;
+$("footer").innerHTML = footerHtml();
 
 $("lookup-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -29,13 +29,17 @@ $("lookup-form").addEventListener("submit", async (e) => {
         <dt>Status</dt><dd><span class="badge ${escapeHtml(b.status)}">${STATUS_LABELS[b.status] ?? escapeHtml(b.status)}</span></dd>
         <dt>Date</dt><dd>${escapeHtml(formatDate(b.date))}</dd>
         <dt>Time</dt><dd>${escapeHtml(formatTime(b.time))}</dd>
-        <dt>Location</dt><dd>${escapeHtml(EVENT.location)}</dd>
+        ${filled(EVENT.location) ? `<dt>Location</dt><dd>${escapeHtml(EVENT.location)}</dd>` : ""}
         <dt>Members</dt><dd>${Number(b.members)}</dd>
         <dt>Payment</dt><dd>${escapeHtml(paymentLabel(b))}</dd>
         <dt>Parent</dt><dd>${escapeHtml(b.parentName)}</dd>
         <dt>Phone</dt><dd>${escapeHtml(b.phone)}</dd>
       </dl>
-      ${b.status === "cancelled" ? "" : `<a class="btn secondary" href="confirm.html?code=${encodeURIComponent(b.code)}">Open confirmation &amp; calendar</a>`}`;
+      ${b.status === "cancelled" ? "" : `
+      <div class="btn-row">
+        ${b.paymentStatus === "paid" ? "" : `<a class="btn cta" href="${escapeHtml(paymentUrl(b.code, b.email))}" target="_blank" rel="noopener">Pay now →</a>`}
+        <a class="btn secondary" href="confirm.html?code=${encodeURIComponent(b.code)}">Open confirmation &amp; calendar</a>
+      </div>`}`;
     $("lookup-result").hidden = false;
   } catch (err) {
     $("lookup-error").textContent = err.message;

@@ -4,7 +4,7 @@ Mobile-first booking site for **Community Matters 2 Inc. (CM2)**.
 Parents scan the flyer QR, pick one window, get a code, and can look it up later.
 Staff manage everything from a private admin page.
 
-**Stack:** plain HTML/CSS/JS (no framework, no build step) · Vercel Functions (`api/`) · Supabase Postgres · Stripe Checkout · GitHub.
+**Stack:** plain HTML/CSS/JS (no framework, no build step) · Vercel Functions (`api/`) · Supabase Postgres · Resend (email) · Stripe payment link · GitHub.
 
 ## How the parts connect
 
@@ -17,16 +17,14 @@ Browser (public/*.html + js)  ──fetch──▶  Vercel Functions (api/*.js) 
 Christmas in Focus/
 ├── api/                    Server code. Each file is one URL on your site.
 │   ├── slots.js            GET  /api/slots      which windows are free (no personal info)
-│   ├── book.js             POST /api/book       hold the slot + start Stripe payment
-│   ├── release.js          POST /api/release    free the hold if they leave Stripe without paying
-│   ├── stripe-webhook.js   POST /api/stripe-webhook  Stripe tells us "paid" / "expired"
+│   ├── book.js             POST /api/book       create a booking + send the 2 emails
 │   ├── booking.js          GET  /api/booking    confirmation page summary (by code)
 │   ├── lookup.js           POST /api/lookup     "Find my booking" (code + email must both match)
 │   └── admin.js            GET/POST /api/admin  staff login, list, check in, cancel, notes
 ├── lib/                    Server helpers (not URLs)
 │   ├── db.js               Database connection + creates & locks the table automatically
 │   ├── auth.js             Staff password check + signed login cookie
-│   ├── stripe.js           Create checkout, record payment, release unpaid holds
+│   ├── email.js            The family + office emails (sent through Resend)
 │   └── http.js             JSON responses, error handling
 ├── public/                 Everything the browser downloads
 │   ├── config.js           ★ The ONE file you edit: dates, times, location, contact
@@ -34,6 +32,7 @@ Christmas in Focus/
 │   ├── confirm.html        "You're booked!"      → js/confirm.js
 │   ├── lookup.html         Find my booking       → js/lookup.js
 │   ├── admin.html          Staff dashboard       → js/admin.js
+│   ├── js/festive.js       Snow, twinkling lights, sparkles, celebration
 │   ├── css/styles.css      All styling (flyer colours, fonts, print layout)
 │   ├── assets/logo.png
 │   └── js/api.js, utils.js Shared helpers (utils.js is used by the server too)
@@ -52,15 +51,17 @@ There's one `bookings` table, plus two database rules (unique indexes):
 
 The list of slots comes from `public/config.js`, so there's nothing to "seed".
 
-### How payment works ($20 per window, Stripe Checkout)
-1. The family picks a time and fills in the form → **Continue to payment**.
-2. The server saves the booking as **Awaiting payment**. This *holds* the slot, so nobody else can take it while they pay.
-3. They pay on **Stripe's own page**. Card details never touch our site.
-4. Stripe sends them back to `confirm.html`, which checks with Stripe and shows **You're booked!**. Separately, Stripe's webhook tells the server. Either one is enough.
-5. If they press back on Stripe, the hold is released right away. If they just close the tab, the checkout expires after **30 minutes** and the slot opens again.
+### What happens when a family books
+1. The family picks a time and fills in the form → **Reserve my window**. The window is theirs straight away.
+2. Two emails go out automatically (`lib/email.js`, sent with Resend):
+   - **To the family:** "You're booked!" with their code, date/time, a calendar invite, and a **Pay $20 now** button (the Stripe payment link).
+   - **To the office** (`info@communitymatters2.org`): every booking detail, and confirmation that the payment link went to the family. Replying to it replies to the family.
+3. The family pays through the Stripe payment link. The link carries their booking code, which shows in Stripe as the payment's **client reference ID**.
+4. Someone at the office checks **Stripe → Payments**, then presses **Mark paid** on the admin page.
 
-The price lives in `public/config.js` (`priceCents`). The server charges what's in that file, never what the browser sends.
-Cancelling in the admin page **does not refund**. Refund in Stripe → Payments → search the booking code → **Refund**. The admin page flags *Paid · refund?* on cancelled paid bookings.
+The payment link and price live in `public/config.js` (`paymentLink`, `priceCents`). If the Stripe link's price changes, change `priceCents` too.
+If an email fails, the booking still stands. The admin page shows **⚠ Failed** with the reason and a **Resend** button.
+Cancelling in the admin page **does not refund**. Refund in Stripe → Payments → find the payment → **Refund**.
 
 ### Why the Supabase publishable key can't see bookings
 Supabase lets anyone holding the project's public "publishable/anon" key read tables that aren't locked down. On first run, `lib/db.js` turns on **Row Level Security** for `bookings` with **no policies**, and revokes access from the `anon` and `authenticated` roles. Only our server, connecting with `DATABASE_URL`, can read or write it. In Supabase → Table Editor, `bookings` should show **RLS enabled**.
@@ -83,19 +84,12 @@ Open `public/config.js` and replace every `TODO`: the year, the slot times, sess
 
 `.env` already has a generated `ADMIN_PASSWORD` and `SESSION_SECRET`. `.env` is git-ignored, so **it is never pushed to GitHub**.
 
-### 2b. Connect Stripe
-**Test first (sandbox):**
-1. Stripe Dashboard → turn on **Test mode** / open your **Sandbox**. Then **Developers → API keys** → copy the **Secret key** (`sk_test_…`).
-2. **Developers → Webhooks → Add endpoint**:
-   - URL: `https://YOUR-PROJECT.vercel.app/api/stripe-webhook`
-   - Events: `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`
-   - Copy its **Signing secret** (`whsec_…`).
-3. In Vercel → Settings → Environment Variables, add `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, then **Redeploy**.
-4. Book a slot and pay with the test card **4242 4242 4242 4242**, any future date, any CVC and ZIP. It shows up in Stripe → Payments (test) and as *Paid $20.00* in the admin page.
-
-**Go live (real money):** the Stripe account must be **activated** (business and bank details filled in). Then repeat steps 1–3 with **Test mode off**: the live secret key `sk_live_…`, a **new live webhook endpoint** with the same URL and events, and its own live `whsec_…`. Replace both values in Vercel, redeploy, and do one real $20 booking and refund it.
-
-> Safer option: instead of the full secret key, the account owner can create a **restricted key** (Developers → API keys → Create restricted key) with only **Checkout Sessions: Write**. It starts with `rk_live_…` and goes in `STRIPE_SECRET_KEY`. It can't touch anything else in the account.
+### 2b. Set up booking emails (Resend)
+1. Resend → **API Keys** → **Create API key** (Sending access) → copy it (`re_…`).
+2. Vercel → Settings → Environment Variables → add **`RESEND_API_KEY`** (exactly that name) → Redeploy.
+3. Admin page → **Send test email**. It should arrive at the office inbox.
+4. **Before going live, verify the domain** so families receive emails too: Resend → **Domains** → **Add domain** → `communitymatters2.org`. Resend shows a few DNS records (TXT/MX). Whoever manages the domain's DNS adds them, then click **Verify**. Then add **`EMAIL_FROM`** = `CM2 Christmas in Focus <bookings@communitymatters2.org>` in Vercel and redeploy.
+   Until the domain is verified, Resend only delivers to the email address that owns the Resend account, so families get nothing.
 
 ### 3. Code on GitHub
 The code lives at <https://github.com/CommunityMatters2/Christmas-In-Focus---Cm2>. To publish changes:
@@ -143,9 +137,9 @@ Note: local testing uses the **same database** as the live site unless you set u
 ## Test checklist
 Run these on the live site before printing flyers:
 
-- [ ] **Book and pay** on a phone (test card `4242 4242 4242 4242`). You land on "You're booked!" with a `CM2-XXXXXX` code and *Paid $20.00*. Back on the home page, the counter has dropped by 1 and that time shows *Taken*.
-- [ ] **Back out of payment:** pick a time, continue to Stripe, press the back arrow on Stripe's page. You see "Payment wasn't completed" and the time is *Open* again.
-- [ ] **Webhook:** Stripe → Developers → Webhooks → your endpoint shows recent deliveries with **200** responses.
+- [ ] **Book a slot** on a phone. You land on "You're booked!" (with a little celebration) and a `CM2-XXXXXX` code. Back on the home page, the counter has dropped by 1 and that time shows *Taken*.
+- [ ] **Emails:** the family email arrives with the **Pay $20 now** button and a calendar invite; the office gets the "New booking" email. Admin shows **✓ Sent**.
+- [ ] **Payment link:** the button opens Stripe's page for $20. After paying, Stripe → Payments shows the booking code as the client reference ID. Press **Mark paid** in admin.
 - [ ] **Add to calendar** downloads an `.ics` file with the right date, time and location.
 - [ ] **Double-booking:** open the home page in two browsers (e.g. Chrome and a private window). Select the *same* time in both and use *different* emails. Submit one, then the other. The second shows "another family just reserved that window", and the time turns *Taken*.
 - [ ] **One per email:** book a different time with the first email. You see "This email already has a booking".

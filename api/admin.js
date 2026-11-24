@@ -6,8 +6,12 @@
 //   POST { action: "cancel",  code }      → frees the slot + email automatically
 //                                           (does NOT refund; staff refund in Stripe)
 //   POST { action: "notes",   code, notes }
+//   POST { action: "paid",    code }      → staff confirmed the $20 in Stripe
+//   POST { action: "unpaid",  code }      → undo "paid"
+//   POST { action: "resend",  code }      → send both booking emails again
+//   POST { action: "testemail" }          → send a test email to the office
 import { db } from "../lib/db.js";
-import { releaseHold } from "../lib/stripe.js";
+import { emailConfigured, sendBookingEmails, sendTestEmail } from "../lib/email.js";
 import { checkPassword, isAdmin, loginCookie, logoutCookie } from "../lib/auth.js";
 import { fail, json, readJson, route, toBooking } from "../lib/http.js";
 import { CODE_PATTERN, normalizeCode } from "../public/js/utils.js";
@@ -18,7 +22,7 @@ export const GET = route(async (request) => {
   if (!isAdmin(request)) return notLoggedIn();
   const sql = await db();
   const rows = await sql`SELECT * FROM bookings ORDER BY date, time, created_at`;
-  return json({ bookings: rows.map(toBooking) });
+  return json({ bookings: rows.map(toBooking), emailConfigured: emailConfigured() });
 });
 
 export const POST = route(async (request) => {
@@ -38,6 +42,16 @@ export const POST = route(async (request) => {
 
   if (!isAdmin(request)) return notLoggedIn();
 
+  if (body.action === "testemail") {
+    try {
+      const to = await sendTestEmail(request);
+      return json({ ok: true, to });
+    } catch (err) {
+      console.error(err);
+      return fail(502, "email_failed", `Test email failed: ${err.message}`);
+    }
+  }
+
   const code = normalizeCode(body.code);
   if (!CODE_PATTERN.test(code)) return fail(400, "invalid", "Missing booking code.");
   const sql = await db();
@@ -48,19 +62,25 @@ export const POST = route(async (request) => {
       UPDATE bookings SET status = 'checked_in', checked_in_at = now()
       WHERE code = ${code} AND status = 'booked' RETURNING *`;
   } else if (body.action === "cancel") {
-    // Unpaid hold: also close its Stripe checkout so it can't be paid afterwards.
-    const [hold] = await sql`
-      SELECT stripe_session_id FROM bookings WHERE code = ${code} AND status = 'pending_payment'`;
-    if (hold) {
-      if (!(await releaseHold(sql, code, hold.stripe_session_id))) {
-        return fail(409, "no_change", "That family is paying right now (or just paid), so it wasn't cancelled. Refresh and try again.");
-      }
-      rows = await sql`SELECT * FROM bookings WHERE code = ${code}`;
-    } else {
-      rows = await sql`
-        UPDATE bookings SET status = 'cancelled', cancelled_at = now()
-        WHERE code = ${code} AND status <> 'cancelled' RETURNING *`;
+    rows = await sql`
+      UPDATE bookings SET status = 'cancelled', cancelled_at = now()
+      WHERE code = ${code} AND status <> 'cancelled' RETURNING *`;
+  } else if (body.action === "paid") {
+    rows = await sql`
+      UPDATE bookings SET payment_status = 'paid', paid_at = now()
+      WHERE code = ${code} AND payment_status <> 'paid' RETURNING *`;
+  } else if (body.action === "unpaid") {
+    rows = await sql`
+      UPDATE bookings SET payment_status = 'unpaid', paid_at = NULL
+      WHERE code = ${code} AND payment_status = 'paid' RETURNING *`;
+  } else if (body.action === "resend") {
+    const [row] = await sql`SELECT * FROM bookings WHERE code = ${code} AND status <> 'cancelled'`;
+    if (!row) return fail(409, "no_change", "Only active bookings can be emailed.");
+    const result = await sendBookingEmails(sql, row, request);
+    if (!result.familySent || !result.officeSent) {
+      return fail(502, "email_failed", `Some emails failed: ${result.row.email_error || "unknown error"}`);
     }
+    rows = [result.row];
   } else if (body.action === "notes") {
     const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, 200) : "";
     rows = await sql`UPDATE bookings SET notes = ${notes} WHERE code = ${code} RETURNING *`;

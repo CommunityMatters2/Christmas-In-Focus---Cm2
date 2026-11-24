@@ -42,6 +42,7 @@
       <div class="toolbar no-print">
         <p class="muted" style="margin:0">Updates every 15 seconds · <span id="updated"></span></p>
         <div class="btn-row" style="margin:0">
+          <button class="btn secondary small" type="button" id="test-email-btn">Send test email</button>
           <button class="btn secondary small" type="button" id="refresh-btn">Refresh now</button>
           <button class="btn secondary small" type="button" id="logout-btn">Sign out</button>
         </div>
@@ -64,6 +65,7 @@
         </div>
       </div>
 
+      <div class="message error" id="email-warning" role="alert"></div>
       <div class="message info" id="admin-message" role="status"></div>
       <div id="day-tables"></div>
     </section>

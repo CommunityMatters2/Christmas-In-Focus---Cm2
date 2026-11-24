@@ -1,18 +1,18 @@
 // confirm.js — runs confirm.html?code=CM2-XXXXXX.
 // Fetches the booking summary from /api/booking (no email/phone is returned).
-// Families land here from Stripe after paying; the server double-checks the
-// payment with Stripe before this page says "You're booked!".
+// Straight after booking (?new=1) it plays a celebration and tells the family
+// their confirmation + payment link have been emailed.
 import { api } from "./api.js";
 import { EVENT } from "../config.js";
+import { celebrate } from "./festive.js";
 import {
-  STATUS_LABELS, buildIcs, downloadFile, escapeHtml, formatDate, formatMoney, formatTime,
+  STATUS_LABELS, buildIcs, downloadFile, escapeHtml, filled, footerHtml, formatDate, formatMoney,
+  formatTime, paymentUrl,
 } from "./utils.js";
 
 const result = document.getElementById("result");
-
-document.getElementById("footer").innerHTML = `
-  <p>Questions? ${escapeHtml(EVENT.contact.phone)} ·
-  <a href="mailto:${escapeHtml(EVENT.contact.email)}">${escapeHtml(EVENT.contact.email)}</a></p>`;
+const params = new URLSearchParams(location.search);
+document.getElementById("footer").innerHTML = footerHtml();
 
 function showNotFound() {
   result.innerHTML = `
@@ -20,29 +20,39 @@ function showNotFound() {
     <p>Please check the link, or use <a href="lookup.html">Find my booking</a> with your code and email.</p>`;
 }
 
+function paymentBox(b) {
+  const amount = escapeHtml(formatMoney(b.amountCents ?? EVENT.priceCents));
+  if (b.paymentStatus === "paid") {
+    return `<div class="pay-box paid"><h3>✓ Payment received</h3><p style="margin:0">Thank you! ${amount} paid.</p></div>`;
+  }
+  return `
+    <div class="pay-box">
+      <h3>Please complete your ${amount} payment</h3>
+      <p>Pay securely through Stripe. Our office will confirm your payment by email or phone.</p>
+      <a class="btn cta block" href="${escapeHtml(paymentUrl(b.code))}" target="_blank" rel="noopener">Pay ${amount} now →</a>
+    </div>`;
+}
+
 async function load() {
-  const code = new URLSearchParams(location.search).get("code");
+  const code = params.get("code");
   if (!code) return showNotFound();
 
-  let b, checkoutUrl;
+  let b;
   try {
-    ({ booking: b, checkoutUrl } = await api(`/api/booking?code=${encodeURIComponent(code)}`));
+    ({ booking: b } = await api(`/api/booking?code=${encodeURIComponent(code)}`));
   } catch (err) {
     console.error(err);
     return showNotFound();
   }
-
-  if (b.status === "pending_payment") return showPending(code, checkoutUrl);
-  if (b.status === "cancelled" && b.paymentStatus !== "paid") {
-    result.innerHTML = `
-      <h2 class="center">This booking wasn't completed</h2>
-      <p>Payment wasn't finished, so the window was released and nothing was charged.</p>
-      <p><a class="btn" href="index.html">Choose a time</a></p>`;
-    return;
-  }
   const cancelled = b.status === "cancelled";
+  const justBooked = params.get("new") === "1" && !cancelled;
+
+  const emailNote = b.emailed
+    ? `<p class="email-note"><span aria-hidden="true">✉️</span><span>We've emailed your confirmation and payment link. Can't find it? Check your spam or promotions folder.</span></p>`
+    : `<p class="email-note"><span aria-hidden="true">✉️</span><span>Please save this page. Our office will also send you the payment link.</span></p>`;
 
   result.innerHTML = `
+    ${cancelled ? "" : `<span class="celebrate-icon" aria-hidden="true">🎄</span>`}
     <h2 class="center">${cancelled ? "This booking was cancelled" : "You're booked!"}</h2>
     ${cancelled ? `<p class="message error">This window has been released. Questions? Contact us below.</p>` : ""}
     <p class="center muted">Your booking code</p>
@@ -50,13 +60,14 @@ async function load() {
     <dl class="details">
       <dt>Date</dt><dd>${escapeHtml(formatDate(b.date))}</dd>
       <dt>Time</dt><dd>${escapeHtml(formatTime(b.time))} (${EVENT.sessionMinutes} min)</dd>
-      <dt>Location</dt><dd>${escapeHtml(EVENT.location)}</dd>
+      ${filled(EVENT.location) ? `<dt>Location</dt><dd>${escapeHtml(EVENT.location)}</dd>` : ""}
       ${b.familyName ? `<dt>Family</dt><dd>${escapeHtml(b.familyName)}</dd>` : ""}
       <dt>Members</dt><dd>${Number(b.members)}</dd>
-      ${b.paymentStatus === "paid" ? `<dt>Paid</dt><dd>${escapeHtml(formatMoney(b.amountCents))}</dd>` : ""}
       <dt>Status</dt><dd><span class="badge ${escapeHtml(b.status)}">${STATUS_LABELS[b.status] ?? escapeHtml(b.status)}</span></dd>
     </dl>
     ${cancelled ? "" : `
+    ${paymentBox(b)}
+    ${justBooked ? emailNote : ""}
     <div class="btn-row no-print">
       <button type="button" class="btn" id="ics-btn">Add to calendar</button>
       <button type="button" class="btn secondary" id="save-btn">Save / screenshot this page</button>
@@ -74,24 +85,13 @@ async function load() {
     downloadFile(`christmas-in-focus-${b.code}.ics`, buildIcs(b), "text/calendar;charset=utf-8");
   });
   document.getElementById("save-btn")?.addEventListener("click", () => window.print());
-}
 
-// Just back from Stripe, the payment can take a few seconds to confirm.
-// Check again a few times before asking them to finish paying.
-let pendingChecks = 0;
-function showPending(code, checkoutUrl) {
-  const justPaid = new URLSearchParams(location.search).has("session_id");
-  if (justPaid && pendingChecks < 5) {
-    pendingChecks++;
-    result.innerHTML = `<p class="muted center">Confirming your payment…</p>`;
-    setTimeout(load, 2000);
-    return;
+  if (justBooked) {
+    celebrate();
+    // Don't replay the celebration if they refresh or come back later.
+    params.delete("new");
+    history.replaceState(null, "", `${location.pathname}?${params}`);
   }
-  result.innerHTML = `
-    <h2 class="center">Payment not finished yet</h2>
-    <p>Your window is being held for a short time, but it isn't booked until payment is complete.</p>
-    ${checkoutUrl ? `<p><a class="btn" href="${escapeHtml(checkoutUrl)}">Finish paying</a></p>` : ""}
-    <p class="muted">Booking code: <strong>${escapeHtml(code)}</strong>. If you've already paid, refresh this page in a minute.</p>`;
 }
 
 load();
